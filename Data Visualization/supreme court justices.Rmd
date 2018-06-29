@@ -1,0 +1,39 @@
+---
+title: "Supreme Court Justices"
+author: "Joe Stoica"
+date: "6/29/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(rvest)
+library(ggthemes)
+```
+
+```{r read in data}
+URL <- "https://en.wikipedia.org/wiki/List_of_Justices_of_the_Supreme_Court_of_the_United_States"
+
+justices <- URL %>% 
+  read_html %>%  
+  html_node("table.wikitable") %>% 
+  html_table(fill = TRUE) %>% 
+  data.frame()
+```
+
+```{r data clean}
+# Removes weird row at bottom of the table
+n <- nrow(justices)
+justices <- justices[1:(n - 1), ]
+
+justices <- justices %>% 
+  separate(Justice.2, into = c("name","year"), sep = "\\(") %>% 
+  separate(Tenure, into = c("start", "end"), sep = "\n–") %>% 
+  separate(end, into = c("end", "reason"), sep = "\\(") %>% 
+  select(name, start, end)
+
+# Removes wikipedia tags
+justices$start <- gsub('\\[e\\]$|\\[m\\]|\\[j\\]$$', '', justices$start)
+```
+
