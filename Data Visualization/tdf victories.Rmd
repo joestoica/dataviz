@@ -1,0 +1,196 @@
+---
+title: "TDF"
+author: "Joe Stoica"
+date: "6/29/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(rvest)
+library(tidyverse)
+library(ggplot2)
+library(reshape2)
+library(directlabels)
+library(ggthemes)
+library(extrafont)
+```
+
+```{r data}
+URL <- "https://en.wikipedia.org/wiki/Tour_de_France_records_and_statistics#Stage_speeds"
+
+tab <- URL %>% 
+  read_html %>%  
+  html_node("table.wikitable:nth-child(36)") %>% 
+  html_table() %>% 
+  data.frame()
+
+country_names <- URL %>% 
+  read_html() %>% 
+  html_nodes("td a") %>% 
+  html_text()
+
+country_names <- country_names[131:164]
+country_names <- country_names[-18]
+
+# transpose it (sloppy but it works?)
+tab <- dcast(melt(tab, id.vars = "Var.1"), variable ~ Var.1)
+
+tab <- tab[, -c(1,2)]
+
+tab <- tab[, -ncol(tab)]
+
+tab[tab == "-"] <- 0
+
+# Adding in the years the TDF was not ran (WWI/WWII)
+first_years <- data.frame(rep(0, nrow(tab)),
+                          rep(0, nrow(tab)),
+                          rep(0, nrow(tab)),
+                          rep(0, nrow(tab)))
+
+names(first_years) <- seq(1915,1918, 1)
+
+second_years <- data.frame(rep(0, nrow(tab)),
+                           rep(0, nrow(tab)),
+                           rep(0, nrow(tab)),
+                           rep(0, nrow(tab)),
+                           rep(0, nrow(tab)),
+                           rep(0, nrow(tab)),
+                           rep(0, nrow(tab)))
+names(second_years) <- seq(1940, 1946, 1)
+
+
+tab <- cbind(tab[,1:12], first_years, tab[,13:33], second_years, tab[, 34:ncol(tab)])
+
+year_names <- names(tab)
+
+past.ten <- tab %>% 
+  select(`2007`, `2008`, `2009`, `2010`, `2011`, `2012`, `2013`, `2014`, `2015`, `2016`, `2017`) 
+
+tab <- apply(tab, 1, cumsum) %>% 
+  data.frame() 
+
+names(tab) <- country_names
+tab <- cbind(year_names, tab)
+
+tab <- tab %>% 
+  gather(country_names, key = "country", value = "wins")
+
+year_seq <- tab$year_names[seq(3, 114, by = 10)]
+```
+
+```{r facet}
+tab$country <- factor(tab$country, levels = c("France", "Belgium", "Italy",
+                                              "Netherlands", "Spain","Germany",
+                                              "Luxembourg", "United Kingdom", "Switzerland",
+                                              "Australia"))
+
+plot <- tab %>% 
+  filter(country %in% c("France", "Belgium", "Italy",
+                        "Netherlands", "Spain","Germany",
+                        "Luxembourg", "United Kingdom", "Switzerland",
+                        "Australia")) %>% 
+  ggplot(aes(year_names, wins, group = country, order = wins)) + 
+  geom_line() +
+  labs(title = "Tour de France Stage Wins By The Top Ten Countries (1903-2017)",
+       caption = "@Joe_Stoica") +
+  scale_x_discrete(breaks = c(1920, 1960, 2000)) + 
+  scale_y_continuous(breaks = seq(0, 700, 100)) +
+  facet_wrap(. ~ country, ncol = 5, scales = "free_x") +
+  theme_tufte() + 
+  theme(legend.position = "none",
+        axis.title = element_blank(),
+        text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5),
+        axis.line = element_line()) 
+
+plot
+ggsave(plot = plot, filename = "tdf_facet.png")
+```
+
+```{r plotting}
+ggplot(tab, aes(year_names, wins, group = country, color = country)) + 
+  
+  geom_line(data = tab[1:920,], label = tab$country) +
+  geom_line(data = tab[921:nrow(tab),], col = "#c9c9c9") + 
+  
+  geom_dl(data = tab %>% filter(country == "France"),
+          aes(label = country),
+          method = list(dl.trans(x = x - 1.1, y = y + .2), 
+                        "last.points", cex = 0.8)) +
+  
+  geom_dl(data = tab %>% filter(country == "Belgium"),
+          aes(label = country), 
+          method = list(dl.trans(x = x - 1.3, y = y + .3), 
+                        "last.points", cex = 0.8)) +
+  
+  geom_dl(data = tab %>% filter(country == "Italy"),
+          aes(label = country), 
+          method = list(dl.trans(x = x - .7, y = y + .3),
+                        "last.points", cex = 0.8)) +
+  
+  geom_dl(data = tab %>% filter(country == "Netherlands"),
+          aes(label = country), 
+          method = list(dl.trans(x = x - 1.85, y = y + .3), 
+                        "last.points", cex = 0.8)) +
+  
+  geom_dl(data = tab %>% filter(country == "Spain"),
+          aes(label = country), 
+          method = list(dl.trans(x = x - .9, y = y + .2), 
+                        "last.points", cex = 0.8)) +
+  
+  geom_dl(data = tab %>% filter(country == "Germany"),
+          aes(label = country), 
+          method = list(dl.trans(x = x - 1.3, y = y + .25), 
+                        "last.points", cex = 0.8)) +
+  
+  
+  geom_dl(data = tab %>% filter(country == "Luxembourg"),
+          aes(label = country), 
+          method = list(dl.trans(x = x - 3.9, y = y + .2), 
+                        "last.points", cex = 0.8)) +
+  
+  geom_dl(data = tab %>% filter(country == "United Kingdom"),
+          aes(label = country), 
+          method = list(dl.trans(x = x - 2.4, y = y - .1), 
+                        "last.points", cex = 0.8)) +
+  
+  theme_fivethirtyeight() +
+  labs( y = "Stage Wins", 
+        title = "Tour de France Stage Wins by Country (1903-2017)",
+        caption = "@Joe_Stoica") +
+  scale_x_discrete(breaks = year_seq) +
+  scale_y_continuous(breaks = seq(0, 700, 100)) +
+  theme(legend.position = "none", 
+        axis.title.x = element_blank(), 
+        panel.border = element_blank(),
+        text = element_text(size = 10)) 
+```
+
+
+```{r}
+past.ten <- apply(past.ten, 1, cumsum) %>% 
+  data.frame() 
+
+past.ten <- cbind(seq(2007, 2017, 1), past.ten)
+names(past.ten) <- c("year",country_names)
+
+
+past.ten <- past.ten %>% 
+  gather(country_names, key = "country", value = "wins")
+
+ggplot(past.ten, aes(year, wins, group = country, color = country)) + 
+  geom_line() + 
+  theme_fivethirtyeight() +
+  labs( y = "Stage Wins", title = "Tour de France Stage Wins by Country (2007-2017)") +
+  scale_x_continuous(breaks = seq(2007, 2017, 1), limits = c(2007, 2018.57)) +
+  scale_y_continuous(breaks = seq(0, 40, 5)) +
+  theme(legend.position = "none", 
+        axis.title.x = element_blank(), 
+        panel.border = element_blank(),
+        text = element_text(size = 10)) +
+  geom_dl(aes(label = country), method = list("last.points"), cex = 1)
+
+
+```
+
